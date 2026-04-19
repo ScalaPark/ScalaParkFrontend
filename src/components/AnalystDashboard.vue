@@ -75,23 +75,59 @@ const donutStyle = computed(() => {
   }
 })
 
+const chartSize = {
+  width: 860,
+  height: 320
+}
+
+const chartPad = {
+  top: 16,
+  right: 12,
+  bottom: 44,
+  left: 58
+}
+
+const yTicks = [0, 20000, 40000, 60000, 80000]
+
+const xStep = computed(() => {
+  const n = Math.max(revenueData.value.length - 1, 1)
+  return (chartSize.width - chartPad.left - chartPad.right) / n
+})
+
+const toX = (index: number) => chartPad.left + index * xStep.value
+const toY = (value: number) => {
+  const h = chartSize.height - chartPad.top - chartPad.bottom
+  const max = 80000
+  return chartPad.top + (1 - value / max) * h
+}
+
 const revenuePath = computed(() => {
-  const points = revenueData.value
-  if (!points.length) return ''
-
-  const width = 100
-  const height = 40
-  const min = Math.min(...points.map((p) => p.revenue))
-  const max = Math.max(...points.map((p) => p.revenue))
-  const range = Math.max(max - min, 1)
-
-  return points
-    .map((p, i) => {
-      const x = (i / (points.length - 1)) * width
-      const y = height - ((p.revenue - min) / range) * height
-      return `${x},${y}`
-    })
+  if (!revenueData.value.length) return ''
+  return revenueData.value
+    .map((p, i) => `${toX(i)},${toY(p.revenue)}`)
     .join(' ')
+})
+
+const revenueDots = computed(() => {
+  return revenueData.value.map((p, i) => ({
+    id: p.id,
+    cx: toX(i),
+    cy: toY(p.revenue)
+  }))
+})
+
+const xTicks = computed(() => {
+  return revenueData.value.map((p, i) => ({
+    day: p.day,
+    x: toX(i)
+  }))
+})
+
+const yTickLayout = computed(() => {
+  return yTicks.map((value) => ({
+    value,
+    y: toY(value)
+  }))
 })
 
 const fetchDailyStats = () => {
@@ -188,16 +224,104 @@ onUnmounted(() => {
       <h3 class="text-lg font-bold text-white mb-4">Revenue Trend (Last 30 Days)</h3>
 
       <div class="revenue-chart">
-        <svg viewBox="0 0 100 40" preserveAspectRatio="none" class="revenue-svg">
-          <polyline :points="revenuePath" fill="none" stroke="#00ff88" stroke-width="1.5" />
-        </svg>
-      </div>
+        <svg :viewBox="`0 0 ${chartSize.width} ${chartSize.height}`" preserveAspectRatio="none" class="revenue-svg">
+          <g>
+            <line
+              v-for="tick in yTickLayout"
+              :key="`y-grid-${tick.value}`"
+              :x1="chartPad.left"
+              :x2="chartSize.width - chartPad.right"
+              :y1="tick.y"
+              :y2="tick.y"
+              stroke="#4b5563"
+              stroke-opacity="0.42"
+              stroke-dasharray="4 5"
+            />
 
-      <div class="flex items-center justify-between text-xs text-gray-500 mt-3">
-        <span>Day 1</span>
-        <span>Day 10</span>
-        <span>Day 20</span>
-        <span>Day 30</span>
+            <line
+              v-for="tick in xTicks"
+              :key="`x-grid-${tick.day}`"
+              :x1="tick.x"
+              :x2="tick.x"
+              :y1="chartPad.top"
+              :y2="chartSize.height - chartPad.bottom"
+              stroke="#4b5563"
+              stroke-opacity="0.35"
+              stroke-dasharray="4 5"
+            />
+          </g>
+
+          <line
+            :x1="chartPad.left"
+            :x2="chartPad.left"
+            :y1="chartPad.top"
+            :y2="chartSize.height - chartPad.bottom"
+            stroke="#9ca3af"
+            stroke-opacity="0.65"
+          />
+          <line
+            :x1="chartPad.left"
+            :x2="chartSize.width - chartPad.right"
+            :y1="chartSize.height - chartPad.bottom"
+            :y2="chartSize.height - chartPad.bottom"
+            stroke="#9ca3af"
+            stroke-opacity="0.65"
+          />
+
+          <polyline
+            :points="revenuePath"
+            fill="none"
+            stroke="#00ff88"
+            stroke-width="4"
+            stroke-linejoin="round"
+            stroke-linecap="round"
+          />
+
+          <circle
+            v-for="dot in revenueDots"
+            :key="`dot-${dot.id}`"
+            :cx="dot.cx"
+            :cy="dot.cy"
+            r="7"
+            fill="#00ff88"
+            stroke="#0b1026"
+            stroke-width="3"
+          />
+
+          <text
+            v-for="tick in yTickLayout"
+            :key="`y-label-${tick.value}`"
+            :x="chartPad.left - 8"
+            :y="tick.y + 4"
+            text-anchor="end"
+            font-size="14"
+            fill="#9ca3af"
+          >
+            {{ `$${Math.round(tick.value / 1000)}k` }}
+          </text>
+
+          <text
+            v-for="tick in xTicks"
+            :key="`x-label-${tick.day}`"
+            :x="tick.x"
+            :y="chartSize.height - chartPad.bottom + 18"
+            text-anchor="middle"
+            font-size="13"
+            fill="#9ca3af"
+          >
+            {{ tick.day }}
+          </text>
+
+          <text
+            :x="(chartPad.left + chartSize.width - chartPad.right) / 2"
+            :y="chartSize.height - 6"
+            text-anchor="middle"
+            font-size="14"
+            fill="#9ca3af"
+          >
+            Day of Month
+          </text>
+        </svg>
       </div>
     </div>
   </div>
@@ -234,10 +358,10 @@ onUnmounted(() => {
 }
 
 .revenue-chart {
-  height: 280px;
+  height: 320px;
   border: 1px solid rgba(45, 45, 45, 0.5);
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.2);
+  background: radial-gradient(circle at 20% 0%, rgba(29, 78, 216, 0.12), rgba(8, 12, 34, 0.88));
   padding: 12px;
 }
 
@@ -281,7 +405,7 @@ onUnmounted(() => {
   }
 
   .revenue-chart {
-    height: 220px;
+    height: 250px;
   }
 }
 </style>
