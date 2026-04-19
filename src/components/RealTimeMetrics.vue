@@ -94,6 +94,6 @@ onUnmounted(() => {
     :value="metrics.deserializationErrors.toLocaleString()"
     subtitle="Invalid character/format errors"
     icon="error"
-    :danger="true"
+    :warning="true"
   />
 </template>

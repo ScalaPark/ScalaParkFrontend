@@ -11,25 +11,31 @@ interface Props {
   icon?: MetricGlyph
   chart?: any
   danger?: boolean
+  warning?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  danger: false
+  danger: false,
+  warning: false
 })
 
 const cardClasses = computed(() => {
   const baseClasses = 'border rounded-xl p-6 backdrop-blur-sm'
-  const gradientClasses = props.danger
-    ? 'bg-gradient-to-br from-red-950/40 to-red-900/20 border-red-500/30'
-    : 'bg-gradient-to-br from-gray-900/80 to-gray-800/40 border-gray-700/50'
+  const gradientClasses = props.warning
+    ? 'bg-gradient-to-br from-amber-950/40 to-amber-900/20 border-amber-500/30'
+    : props.danger
+      ? 'bg-gradient-to-br from-red-950/40 to-red-900/20 border-red-500/30'
+      : 'bg-gradient-to-br from-gray-900/80 to-gray-800/40 border-gray-700/50'
   return `${baseClasses} ${gradientClasses}`
 })
 
 const valueClasses = computed(() => {
+  if (props.warning) return 'text-amber-300'
   return props.danger ? 'text-red-400' : 'text-white'
 })
 
 const iconBackgroundClasses = computed(() => {
+  if (props.warning) return 'bg-amber-500/20'
   return props.danger ? 'bg-red-500/20' : 'bg-brand-20'
 })
 </script>
@@ -50,7 +56,7 @@ const iconBackgroundClasses = computed(() => {
         v-if="icon"
         :class="`w-12 h-12 rounded-lg flex items-center justify-center ${iconBackgroundClasses}`"
       >
-        <GlyphIcon :name="icon" :danger="danger" />
+        <GlyphIcon :name="icon" :danger="danger" :warning="warning" />
       </div>
     </div>
     <div v-if="chart" class="mt-4">
