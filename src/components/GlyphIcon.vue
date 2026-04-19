@@ -6,13 +6,16 @@ type GlyphName = 'operator' | 'analyst' | 'total' | 'valid' | 'invalid' | 'error
 interface Props {
   name: GlyphName
   danger?: boolean
+  warning?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  danger: false
+  danger: false,
+  warning: false
 })
 
 const glyphColor = computed(() => {
+  if (props.warning) return '#fbbf24'
   return props.danger ? '#f87171' : '#00ff88'
 })
 </script>

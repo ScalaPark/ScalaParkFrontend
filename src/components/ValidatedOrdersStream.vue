@@ -140,7 +140,7 @@ onUnmounted(() => {
             : 'bg-gray-800/40 border-gray-700/30'
         ]"
       >
-        <div class="grid grid-cols-4 gap-4 text-sm">
+        <div class="grid grid-cols-4 gap-4 text-sm stream-main-grid">
           <div>
             <div class="text-xs text-gray-500 mb-1">Order ID</div>
             <div class="text-[#00ff88] font-mono">{{ order.orderId }}</div>
@@ -160,7 +160,7 @@ onUnmounted(() => {
             <div class="text-gray-300">{{ new Date(order.processedAt).toLocaleTimeString() }}</div>
           </div>
         </div>
-        <div class="mt-3 pt-3 border-t border-gray-700/50 grid grid-cols-3 gap-4 text-xs">
+        <div class="mt-3 pt-3 border-t border-gray-700/50 grid grid-cols-3 gap-4 text-xs stream-meta-grid">
           <div>
             <span class="text-gray-500">Location:</span>
             <span class="text-gray-400"> {{ order.order.location.city }}, {{ order.order.location.country }}</span>
@@ -180,3 +180,21 @@ onUnmounted(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+@media (max-width: 1024px) {
+  .stream-main-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stream-meta-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .stream-main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
