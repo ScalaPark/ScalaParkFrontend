@@ -13,6 +13,7 @@ interface MetricsHistory {
 const history = ref<MetricsHistory[]>([])
 let counter = 0
 let interval: ReturnType<typeof setInterval> | null = null
+let stream: EventSource | null = null
 
 const chartWidth = 600
 const chartHeight = 240
@@ -70,39 +71,53 @@ const xTicks = computed(() => {
   })
 })
 
-const fetchHistory = () => {
-  const newMetric: MetricsHistory = {
-    id: `metric-${Date.now()}-${counter++}`,
-    time: new Date().toLocaleTimeString(),
-    total: Math.floor(Math.random() * 200 + 100),
-    valid: Math.floor(Math.random() * 150 + 80),
-    invalid: Math.floor(Math.random() * 40 + 10),
-    errors: Math.floor(Math.random() * 10)
+const fetchHistory = async () => {
+  try {
+    const response = await fetch('/api/operator/validation/history?limit=20')
+    if (!response.ok) return
+    const data = (await response.json()) as MetricsHistory[]
+    history.value = data
+    counter += 1
+  } catch {
+    // Keep the latest rendered data if the backend is unavailable.
   }
+}
 
-  history.value = [...history.value, newMetric].slice(-20)
+const connectMetricsStream = () => {
+  stream = new EventSource('/api/operator/validation/stream')
+  stream.onmessage = (event) => {
+    try {
+      const metric = JSON.parse(event.data) as {
+        windowEnd: string
+        total: number
+        valid: number
+        invalid: number
+        deserializationErrors: number
+      }
+      const point: MetricsHistory = {
+        id: `metric-${Date.now()}-${counter++}`,
+        time: metric.windowEnd,
+        total: metric.total,
+        valid: metric.valid,
+        invalid: metric.invalid,
+        errors: metric.deserializationErrors
+      }
+      history.value = [...history.value, point].slice(-20)
+    } catch {
+      // Ignore malformed payload.
+    }
+  }
 }
 
 onMounted(() => {
-  // Inicializar con algunos datos
-  const initialData: MetricsHistory[] = []
-  for (let i = 0; i < 10; i++) {
-    initialData.push({
-      id: `metric-init-${i}`,
-      time: new Date(Date.now() - (10 - i) * 60000).toLocaleTimeString(),
-      total: Math.floor(Math.random() * 200 + 100),
-      valid: Math.floor(Math.random() * 150 + 80),
-      invalid: Math.floor(Math.random() * 40 + 10),
-      errors: Math.floor(Math.random() * 10)
-    })
-  }
-  history.value = initialData
-
-  interval = setInterval(fetchHistory, 60000) // Cada 1 minuto
+  fetchHistory()
+  connectMetricsStream()
+  interval = setInterval(fetchHistory, 60000)
 })
 
 onUnmounted(() => {
   if (interval) clearInterval(interval)
+  if (stream) stream.close()
 })
 </script>
 

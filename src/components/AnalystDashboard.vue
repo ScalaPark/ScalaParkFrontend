@@ -36,28 +36,15 @@ const dailyStats = ref<DailyStats>({
 })
 
 const revenueData = ref<RevenuePoint[]>(
-  Array.from({ length: 30 }, (_, i) => ({
-    id: `day-${i}`,
-    day: i + 1,
-    revenue: Math.floor(Math.random() * 50000 + 30000)
-  }))
+  []
 )
 
-const topProducts = ref<Product[]>([
-  { id: 'prod-1', name: 'Wireless Headphones', sales: 1243 },
-  { id: 'prod-2', name: 'Smart Watch', sales: 982 },
-  { id: 'prod-3', name: 'Laptop Stand', sales: 756 },
-  { id: 'prod-4', name: 'USB-C Hub', sales: 654 },
-  { id: 'prod-5', name: 'Mechanical Keyboard', sales: 543 }
-])
+const topProducts = ref<Product[]>([])
 
-const customerSegments = ref<Segment[]>([
-  { id: 'seg-1', name: 'New', value: 35, color: '#00ff88' },
-  { id: 'seg-2', name: 'Returning', value: 45, color: '#ff4fd8' },
-  { id: 'seg-3', name: 'VIP', value: 20, color: '#00d4ff' }
-])
+const customerSegments = ref<Segment[]>([])
 
 let statsInterval: ReturnType<typeof setInterval> | null = null
+let stream: EventSource | null = null
 
 const maxProductSales = computed(() => {
   return Math.max(...topProducts.value.map((p) => p.sales), 1)
@@ -130,22 +117,61 @@ const yTickLayout = computed(() => {
   }))
 })
 
-const fetchDailyStats = () => {
-  dailyStats.value = {
-    totalRevenue: Math.floor(Math.random() * 100000 + 100000),
-    avgOrderValue: Math.floor(Math.random() * 100 + 150),
-    newCustomers: Math.floor(Math.random() * 300 + 200),
-    totalOrders: Math.floor(Math.random() * 2000 + 15000)
+const fetchDailyStats = async () => {
+  try {
+    const response = await fetch('/api/analyst/daily')
+    if (!response.ok) return
+    dailyStats.value = (await response.json()) as DailyStats
+  } catch {
+    // Keep previous values while backend reconnects.
+  }
+}
+
+const fetchRevenueTrend = async () => {
+  try {
+    const response = await fetch('/api/analyst/revenue/trend?days=30')
+    if (!response.ok) return
+    revenueData.value = (await response.json()) as RevenuePoint[]
+  } catch {
+    // Keep previous values while backend reconnects.
+  }
+}
+
+const fetchLatestReport = async () => {
+  try {
+    const response = await fetch('/api/analyst/report/latest')
+    if (!response.ok) return
+    const report = (await response.json()) as {
+      topProducts: Product[]
+      customerSegments: Segment[]
+    }
+    topProducts.value = report.topProducts ?? []
+    customerSegments.value = report.customerSegments ?? []
+  } catch {
+    // Keep previous values while backend reconnects.
+  }
+}
+
+const refreshAnalystData = async () => {
+  await Promise.all([fetchDailyStats(), fetchRevenueTrend(), fetchLatestReport()])
+}
+
+const connectAnalystStream = () => {
+  stream = new EventSource('/api/analyst/daily/stream')
+  stream.onmessage = async () => {
+    await refreshAnalystData()
   }
 }
 
 onMounted(() => {
-  fetchDailyStats()
-  statsInterval = setInterval(fetchDailyStats, 300000)
+  refreshAnalystData()
+  connectAnalystStream()
+  statsInterval = setInterval(refreshAnalystData, 300000)
 })
 
 onUnmounted(() => {
   if (statsInterval) clearInterval(statsInterval)
+  if (stream) stream.close()
 })
 </script>
 
