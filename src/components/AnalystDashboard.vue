@@ -9,12 +9,6 @@ interface DailyStats {
   totalOrders: number
 }
 
-interface RevenuePoint {
-  id: string
-  day: number
-  revenue: number
-}
-
 interface Product {
   id: string
   name: string
@@ -34,10 +28,6 @@ const dailyStats = ref<DailyStats>({
   newCustomers: 0,
   totalOrders: 0
 })
-
-const revenueData = ref<RevenuePoint[]>(
-  []
-)
 
 const topProducts = ref<Product[]>([])
 
@@ -62,76 +52,11 @@ const donutStyle = computed(() => {
   }
 })
 
-const chartSize = {
-  width: 860,
-  height: 320
-}
-
-const chartPad = {
-  top: 16,
-  right: 12,
-  bottom: 44,
-  left: 58
-}
-
-const yTicks = [0, 20000, 40000, 60000, 80000]
-
-const xStep = computed(() => {
-  const n = Math.max(revenueData.value.length - 1, 1)
-  return (chartSize.width - chartPad.left - chartPad.right) / n
-})
-
-const toX = (index: number) => chartPad.left + index * xStep.value
-const toY = (value: number) => {
-  const h = chartSize.height - chartPad.top - chartPad.bottom
-  const max = 80000
-  return chartPad.top + (1 - value / max) * h
-}
-
-const revenuePath = computed(() => {
-  if (!revenueData.value.length) return ''
-  return revenueData.value
-    .map((p, i) => `${toX(i)},${toY(p.revenue)}`)
-    .join(' ')
-})
-
-const revenueDots = computed(() => {
-  return revenueData.value.map((p, i) => ({
-    id: p.id,
-    cx: toX(i),
-    cy: toY(p.revenue)
-  }))
-})
-
-const xTicks = computed(() => {
-  return revenueData.value.map((p, i) => ({
-    day: p.day,
-    x: toX(i)
-  }))
-})
-
-const yTickLayout = computed(() => {
-  return yTicks.map((value) => ({
-    value,
-    y: toY(value)
-  }))
-})
-
 const fetchDailyStats = async () => {
   try {
     const response = await fetch('/api/analyst/daily')
     if (!response.ok) return
     dailyStats.value = (await response.json()) as DailyStats
-  } catch {
-    // Keep previous values while backend reconnects.
-  }
-}
-
-const fetchRevenueTrend = async () => {
-  try {
-    const response = await fetch('/api/analyst/revenue/trend?days=30')
-    if (!response.ok) return
-    revenueData.value = (await response.json()) as RevenuePoint[]
   } catch {
     // Keep previous values while backend reconnects.
   }
@@ -153,7 +78,7 @@ const fetchLatestReport = async () => {
 }
 
 const refreshAnalystData = async () => {
-  await Promise.all([fetchDailyStats(), fetchRevenueTrend(), fetchLatestReport()])
+  await Promise.all([fetchDailyStats(), fetchLatestReport()])
 }
 
 const connectAnalystStream = () => {
@@ -209,7 +134,7 @@ onUnmounted(() => {
       />
     </div>
 
-    <div class="grid analyst-grid-2 gap-6 mb-8">
+    <div class="grid analyst-grid-2 gap-6">
       <div class="bg-gradient-to-br from-gray-900/80 to-gray-800/40 border border-gray-700/50 rounded-xl p-6 backdrop-blur-sm">
         <h3 class="text-lg font-bold text-white mb-4">Top 5 Products</h3>
         <div class="space-y-3">
@@ -245,111 +170,6 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
-
-    <div class="bg-gradient-to-br from-gray-900/80 to-gray-800/40 border border-gray-700/50 rounded-xl p-6 backdrop-blur-sm">
-      <h3 class="text-lg font-bold text-white mb-4">Revenue Trend (Last 30 Days)</h3>
-
-      <div class="revenue-chart">
-        <svg :viewBox="`0 0 ${chartSize.width} ${chartSize.height}`" preserveAspectRatio="none" class="revenue-svg">
-          <g>
-            <line
-              v-for="tick in yTickLayout"
-              :key="`y-grid-${tick.value}`"
-              :x1="chartPad.left"
-              :x2="chartSize.width - chartPad.right"
-              :y1="tick.y"
-              :y2="tick.y"
-              stroke="#4b5563"
-              stroke-opacity="0.42"
-              stroke-dasharray="4 5"
-            />
-
-            <line
-              v-for="tick in xTicks"
-              :key="`x-grid-${tick.day}`"
-              :x1="tick.x"
-              :x2="tick.x"
-              :y1="chartPad.top"
-              :y2="chartSize.height - chartPad.bottom"
-              stroke="#4b5563"
-              stroke-opacity="0.35"
-              stroke-dasharray="4 5"
-            />
-          </g>
-
-          <line
-            :x1="chartPad.left"
-            :x2="chartPad.left"
-            :y1="chartPad.top"
-            :y2="chartSize.height - chartPad.bottom"
-            stroke="#9ca3af"
-            stroke-opacity="0.65"
-          />
-          <line
-            :x1="chartPad.left"
-            :x2="chartSize.width - chartPad.right"
-            :y1="chartSize.height - chartPad.bottom"
-            :y2="chartSize.height - chartPad.bottom"
-            stroke="#9ca3af"
-            stroke-opacity="0.65"
-          />
-
-          <polyline
-            :points="revenuePath"
-            fill="none"
-            stroke="#00ff88"
-            stroke-width="4"
-            stroke-linejoin="round"
-            stroke-linecap="round"
-          />
-
-          <circle
-            v-for="dot in revenueDots"
-            :key="`dot-${dot.id}`"
-            :cx="dot.cx"
-            :cy="dot.cy"
-            r="7"
-            fill="#00ff88"
-            stroke="#0b1026"
-            stroke-width="3"
-          />
-
-          <text
-            v-for="tick in yTickLayout"
-            :key="`y-label-${tick.value}`"
-            :x="chartPad.left - 8"
-            :y="tick.y + 4"
-            text-anchor="end"
-            font-size="14"
-            fill="#9ca3af"
-          >
-            {{ `$${Math.round(tick.value / 1000)}k` }}
-          </text>
-
-          <text
-            v-for="tick in xTicks"
-            :key="`x-label-${tick.day}`"
-            :x="tick.x"
-            :y="chartSize.height - chartPad.bottom + 18"
-            text-anchor="middle"
-            font-size="13"
-            fill="#9ca3af"
-          >
-            {{ tick.day }}
-          </text>
-
-          <text
-            :x="(chartPad.left + chartSize.width - chartPad.right) / 2"
-            :y="chartSize.height - 6"
-            text-anchor="middle"
-            font-size="14"
-            fill="#9ca3af"
-          >
-            Day of Month
-          </text>
-        </svg>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -381,19 +201,6 @@ onUnmounted(() => {
   left: 50%;
   transform: translate(-50%, -50%);
   border: 1px solid rgba(45, 45, 45, 0.5);
-}
-
-.revenue-chart {
-  height: 320px;
-  border: 1px solid rgba(45, 45, 45, 0.5);
-  border-radius: 12px;
-  background: radial-gradient(circle at 20% 0%, rgba(29, 78, 216, 0.12), rgba(8, 12, 34, 0.88));
-  padding: 12px;
-}
-
-.revenue-svg {
-  width: 100%;
-  height: 100%;
 }
 
 @media (max-width: 1024px) {
@@ -428,10 +235,6 @@ onUnmounted(() => {
   .donut-center {
     width: 56px;
     height: 56px;
-  }
-
-  .revenue-chart {
-    height: 250px;
   }
 }
 </style>
