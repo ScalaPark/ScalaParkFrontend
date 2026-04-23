@@ -32,90 +32,64 @@ interface OrderItem {
 }
 
 interface OrderDetail {
-  header: OrderHeader
-  customer: Customer
-  location: Location
-  payment: Payment
-  items: OrderItem[]
+  header?: OrderHeader
+  customer?: Customer
+  location?: Location
+  payment?: Payment
+  items?: OrderItem[]
 }
 
 interface ValidatedOrder {
   orderId: string
   correlationId: string
-  status: 'VALID' | 'INVALID'
-  errors: string[]
+  status?: 'VALID' | 'INVALID'
+  errors?: string[]
   processedAt: string
-  order: OrderDetail
+  order?: OrderDetail
 }
 
 const orders = ref<ValidatedOrder[]>([])
 let interval: ReturnType<typeof setInterval> | null = null
 
-const getRandomName = (): string => {
-  const names = ['Alice Johnson', 'Bob Smith', 'Carol Davis', 'David Wilson'] as const
-  return names[Math.floor(Math.random() * names.length)]!
+const parseDate = (raw: string) => {
+  const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T')
+  const dt = new Date(normalized)
+  return Number.isNaN(dt.getTime()) ? null : dt
 }
 
-const getRandomCountry = (): string => {
-  const countries = ['USA', 'UK', 'Germany', 'Japan'] as const
-  return countries[Math.floor(Math.random() * countries.length)]!
+const formatTime = (raw: string) => {
+  const dt = parseDate(raw)
+  return dt ? dt.toLocaleTimeString() : raw
 }
 
-const getRandomCity = (): string => {
-  const cities = ['New York', 'London', 'Berlin', 'Tokyo'] as const
-  return cities[Math.floor(Math.random() * cities.length)]!
+const formatAmount = (order: ValidatedOrder) => {
+  const amount = order.order?.payment?.amount
+  const currency = order.order?.payment?.currency ?? 'USD'
+  if (typeof amount !== 'number') return `N/A ${currency}`
+  return `$${amount.toFixed(2)} ${currency}`
 }
 
-const getRandomPaymentMethod = (): string => {
-  const methods = ['CREDIT_CARD', 'PAYPAL', 'DEBIT_CARD'] as const
-  return methods[Math.floor(Math.random() * methods.length)]!
+const formatLocation = (order: ValidatedOrder) => {
+  const city = order.order?.location?.city
+  const country = order.order?.location?.country
+  if (!city && !country) return 'N/A'
+  return [city, country].filter(Boolean).join(', ')
 }
 
-const fetchOrders = () => {
-  // Simulación de datos del tópico orders-validated
-  const mockOrder: ValidatedOrder = {
-    orderId: `ORD-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
-    correlationId: `CORR-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
-    status: 'VALID',
-    errors: [],
-    processedAt: new Date().toISOString(),
-    order: {
-      header: {
-        orderId: `ORD-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
-        timestamp: new Date().toISOString(),
-        source: 'WEB'
-      },
-      customer: {
-        customerId: `USR-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
-        email: `user${Math.floor(Math.random() * 1000)}@example.com`,
-        name: getRandomName()
-      },
-      location: {
-        country: getRandomCountry(),
-        city: getRandomCity(),
-        address: `${Math.floor(Math.random() * 999)} Main St`
-      },
-      payment: {
-        method: getRandomPaymentMethod(),
-        amount: Math.random() * 500 + 20,
-        currency: 'USD'
-      },
-      items: [
-        {
-          productId: `PROD-${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
-          quantity: Math.floor(Math.random() * 5) + 1,
-          price: Math.random() * 100 + 10
-        }
-      ]
-    }
+const fetchOrders = async () => {
+  try {
+    const response = await fetch('/api/operator/orders/validated?limit=10')
+    if (!response.ok) return
+    const data = (await response.json()) as ValidatedOrder[]
+    orders.value = data
+  } catch {
+    // Keep previous rows when fetch fails.
   }
-
-  orders.value = [mockOrder, ...orders.value].slice(0, 10)
 }
 
 onMounted(() => {
   fetchOrders()
-  interval = setInterval(fetchOrders, 15000) // Cada 15 segundos
+  interval = setInterval(fetchOrders, 15000)
 })
 
 onUnmounted(() => {
@@ -147,32 +121,30 @@ onUnmounted(() => {
           </div>
           <div>
             <div class="text-xs text-gray-500 mb-1">Customer</div>
-            <div class="text-gray-300">{{ order.order.customer.name }}</div>
+            <div class="text-gray-300">{{ order.order?.customer?.name ?? 'N/A' }}</div>
           </div>
           <div>
             <div class="text-xs text-gray-500 mb-1">Amount</div>
-            <div class="text-gray-300">
-              ${{ order.order.payment.amount.toFixed(2) }} {{ order.order.payment.currency }}
-            </div>
+            <div class="text-gray-300">{{ formatAmount(order) }}</div>
           </div>
           <div>
             <div class="text-xs text-gray-500 mb-1">Processed At</div>
-            <div class="text-gray-300">{{ new Date(order.processedAt).toLocaleTimeString() }}</div>
+            <div class="text-gray-300">{{ formatTime(order.processedAt) }}</div>
           </div>
         </div>
         <div class="mt-3 pt-3 border-t border-gray-700/50 grid grid-cols-3 gap-4 text-xs stream-meta-grid">
           <div>
             <span class="text-gray-500">Location:</span>
-            <span class="text-gray-400"> {{ order.order.location.city }}, {{ order.order.location.country }}</span>
+            <span class="text-gray-400"> {{ formatLocation(order) }}</span>
           </div>
           <div>
             <span class="text-gray-500">Payment:</span>
-            <span class="text-gray-400"> {{ order.order.payment.method }}</span>
+            <span class="text-gray-400"> {{ order.order?.payment?.method ?? 'N/A' }}</span>
           </div>
           <div>
             <span class="text-gray-500">Status:</span>
-            <span :class="order.status === 'VALID' ? 'text-[#00ff88]' : 'text-red-400'">
-              {{ order.status }}
+            <span :class="(order.status ?? 'INVALID') === 'VALID' ? 'text-[#00ff88]' : 'text-red-400'">
+              {{ order.status ?? 'UNKNOWN' }}
             </span>
           </div>
         </div>
