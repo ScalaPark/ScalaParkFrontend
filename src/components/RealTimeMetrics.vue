@@ -28,6 +28,7 @@ const metrics = ref<ValidationMetrics>({
 const history = ref<HistoryItem[]>([])
 let counter = 0
 let interval: ReturnType<typeof setInterval> | null = null
+let stream: EventSource | null = null
 
 const validRate = computed(() => {
   return metrics.value.total > 0
@@ -35,35 +36,51 @@ const validRate = computed(() => {
     : '0'
 })
 
-const fetchMetrics = () => {
-  // Simulación de datos del tópico orders-validation-metrics
-  const mockData: ValidationMetrics = {
-    windowStart: new Date(Date.now() - 60000).toISOString(),
-    windowEnd: new Date().toISOString(),
-    total: Math.floor(Math.random() * 200 + 100),
-    valid: Math.floor(Math.random() * 150 + 80),
-    invalid: Math.floor(Math.random() * 40 + 10),
-    deserializationErrors: Math.floor(Math.random() * 10)
-  }
+const parseDate = (raw: string) => {
+  const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T')
+  const dt = new Date(normalized)
+  return Number.isNaN(dt.getTime()) ? null : dt
+}
 
-  metrics.value = mockData
-  history.value = [...history.value, { id: `hist-${Date.now()}-${counter++}`, value: mockData.total }].slice(-20)
+const formatWindowTime = (raw: string) => {
+  const dt = parseDate(raw)
+  return dt ? dt.toLocaleTimeString() : raw
+}
+
+const fetchMetrics = async () => {
+  try {
+    const response = await fetch('/api/operator/validation/window')
+    if (!response.ok) return
+    const data = (await response.json()) as ValidationMetrics
+    metrics.value = data
+    history.value = [...history.value, { id: `hist-${Date.now()}-${counter++}`, value: data.total }].slice(-20)
+  } catch {
+    // Keep previous value when the API is temporarily unavailable.
+  }
+}
+
+const connectMetricsStream = () => {
+  stream = new EventSource('/api/operator/validation/stream')
+  stream.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data) as ValidationMetrics
+      metrics.value = data
+      history.value = [...history.value, { id: `hist-${Date.now()}-${counter++}`, value: data.total }].slice(-20)
+    } catch {
+      // Ignore malformed SSE payloads.
+    }
+  }
 }
 
 onMounted(() => {
-  // Inicializar con datos históricos
-  const initialHistory = Array.from({ length: 10 }, (_, i) => ({
-    id: `hist-init-${i}`,
-    value: Math.floor(Math.random() * 200 + 100)
-  }))
-  history.value = initialHistory
-
   fetchMetrics()
-  interval = setInterval(fetchMetrics, 60000) // Cada 1 minuto
+  connectMetricsStream()
+  interval = setInterval(fetchMetrics, 60000)
 })
 
 onUnmounted(() => {
   if (interval) clearInterval(interval)
+  if (stream) stream.close()
 })
 </script>
 
@@ -71,7 +88,7 @@ onUnmounted(() => {
   <MetricCard
     title="Total Orders (Current Window)"
     :value="metrics.total.toLocaleString()"
-    :subtitle="`Window: ${new Date(metrics.windowStart).toLocaleTimeString()} - ${new Date(metrics.windowEnd).toLocaleTimeString()}`"
+    :subtitle="`Window: ${formatWindowTime(metrics.windowStart)} - ${formatWindowTime(metrics.windowEnd)}`"
     icon="total"
   />
 
